@@ -20,6 +20,8 @@ $controllerurl      = ''; // full url to the UniFi Controller, eg. 'https://22.2
 $controllerversion  = ''; // the version of the Controller software, e.g. '4.6.6' (must be at least 4.0.0)
 $site_id            = 'default'; // Pick a different one if you have more than one site
 
+$debug = false;
+
 // The value that represents 100% height on the graph to begin with
 // based on my house's maximum use per 5 min (ish), change to suit your data usage
 $max_graph = 350000000;
