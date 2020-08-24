@@ -15,7 +15,7 @@
  */
 
 const unsigned long CONNECT_TIMEOUT = 30; // How long to attempt to connect to saved WiFi before going into AP mode
-const unsigned long AP_TIMEOUT = 60; // Wait 20 Seconds in the config portal before trying again the original WiFi creds
+const unsigned long AP_TIMEOUT = 120; // Wait 20 Seconds in the config portal before trying again the original WiFi creds
 
 // In case we want to do something when WiFiManager enters configuration mode
 void configModeCallback (WiFiManager *myWiFiManager) {
@@ -42,7 +42,7 @@ void startWiFiManagerWithParameters() {
   wm.setSaveConfigCallback(saveConfigCallback);
   wm.setConnectTimeout(CONNECT_TIMEOUT);
   wm.setTimeout(AP_TIMEOUT);
-  wm.setCountry("GB");
+  wm.setCountry("US");
 
   // Set hostname from settings
   wm.setHostname(hostname);

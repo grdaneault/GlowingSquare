@@ -1,0 +1,8 @@
+user admin
+topic readwrite living_room/#
+
+user chromecast
+topic write living_room/status
+
+user unifi
+topic read living_room/#

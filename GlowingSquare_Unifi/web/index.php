@@ -40,12 +40,7 @@ function formatBytes($bytes, $precision = 2) {
     // Format it to the correct dp
     $number = number_format($bytes, $precision);
 
-    if (strlen($number) > 2) {
-      return $number . $short_units[$pow];
-    } else {
-      return $number . $units[$pow];
-    }
-
+    return $number . $short_units[$pow];
 }
 
 /**
@@ -67,24 +62,32 @@ $out['clients'] = 0;
 $out['guests'] = 0;
 $out['wireless'] = 0;
 $out['wired'] = 0;
+$out['curr_rx'] = 0;
+$out['max_rx'] = 0;
+$out['curr_tx'] = 0;
+$out['max_tx'] = 0;
 $raw_month_tx = 0;
 $raw_month_rx = 0;
 $out['min_uptime'] = 9999999999;
 
 // Count the different types of clients
 foreach ($clients as $client) {
+    if ($client->is_guest) {
+        $out['guests']++;
+    } else {
+        $out['clients']++;
+    }
 
-  if ($client->is_guest) $out['guests']++;
-    else $out['clients']++;
+    if ($client->is_wired) {
+        $out['wired']++;
+    } else {
+        $out['wireless']++;
+    }
 
-  if ($client->is_wired) $out['wired']++;
-    else $out['wireless']++;
-
-  if ($client->uptime < $out['min_uptime']) {
-    $out['newest'] = $client->hostname;
-    $out['min_uptime'] = $client->uptime;
-  }
-
+    if ($client->uptime < $out['min_uptime']) {
+        $out['newest'] = $client->hostname;
+        $out['min_uptime'] = $client->uptime;
+    }
 }
 
 /*
@@ -96,14 +99,14 @@ $current_month = date('m', time());
 
 foreach ($daily_stats as $stat) {
 
-  // The time is provided in ms, annoyingly
-  $time = $stat->time / 1000;
+    // The time is provided in ms, annoyingly
+    $time = $stat->time / 1000;
 
-  // Only use the data if it's from this month
-  if (date('m', $time) == $current_month) {
-    $raw_month_tx += $stat->{'wan-tx_bytes'};
-    $raw_month_rx += $stat->{'wan-rx_bytes'};
-  }
+    // Only use the data if it's from this month
+    if (date('m', $time) == $current_month) {
+        $raw_month_tx += $stat->{'wan-tx_bytes'};
+        $raw_month_rx += $stat->{'wan-rx_bytes'};
+    }
 
 }
 
@@ -117,30 +120,53 @@ $out['month_rx'] = formatBytes($raw_month_rx, 0);
 $out['graph'] = [];
 // Each entry will be one line of pixels on the graph
 // So we only want the last 64 entries
-$graph_width = $_GET['width'];
-$graph_height = $_GET['height'];
+$graph_width = isset($_GET['width']) && is_numeric($_GET['width']) ? intval($_GET['width']) : 128;
+$graph_height = isset($_GET['height']) && is_numeric($_GET['height']) ? intval($_GET['height']) : 16;
 
-// Use the last 100 datapoints to figure out the max height of the graph
-$n = 100;
+$n = $graph_width;
+
+$max_rx = 0;
+$max_tx = 0;
 foreach (array_slice($minute_stats, -$n, $n) as $stat) {
 
-  // Define what we're using for the graph
-  $bytes = $stat->{'wan-rx_bytes'};
+    if ($max_rx < $stat->{'wan-rx_bytes'}) {
+        $max_rx = $stat->{'wan-rx_bytes'};
+    }
 
-  if ($bytes > $max_graph) $max_graph = $bytes;
+    if ($max_tx < $stat->{'wan-tx_bytes'}) {
+        $max_tx = $stat->{'wan-tx_bytes'};
+    }
 }
+
+$out['max_rx'] = formatBytes($max_rx, 0);
+$out['max_tx'] = formatBytes($max_tx, 0);
+
+$max_tx = max($max_tx, $max_graph_tx);
+$max_rx = max($max_rx, $max_graph_rx);
+
+$max_max = max($max_tx, $max_rx);
+$max_tx = $max_max;
+$max_rx = $max_max;
 
 // Use the display width number of datapoints to draw the graph
 
-foreach (array_slice($minute_stats, -$graph_width, $graph_width) as $stat) {
 
-  // Define what we're using for the graph
-  $bytes = $stat->{'wan-rx_bytes'};
+$rx = $tx = 0;
+foreach (array_slice($minute_stats, -$graph_width / 2, $graph_width / 2) as $stat) {
 
-  $pixel_height = ceil(($bytes/ $max_graph) * $graph_height);
-  array_push($out['graph'], $pixel_height);
+    // Define what we're using for the graph
+    $rx = $stat->{'wan-rx_bytes'};
+    $tx = $stat->{'wan-tx_bytes'};
+
+    $rx_height = ceil(($rx / $max_rx) * $graph_height);
+    $tx_height = ceil(($tx / $max_tx) * $graph_height);
+    array_push($out['graph'], $rx_height);
+    array_push($out['graph'], $tx_height);
 
 }
+
+$out['curr_rx'] = formatBytes($rx, 0);
+$out['curr_tx'] = formatBytes($tx, 0);
 
 /*
   Output the data with the correct headers

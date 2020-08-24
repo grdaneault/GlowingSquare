@@ -16,35 +16,51 @@
 
 // We will use PxMatrix in double-buffer mode to allow us
 // to change many pixels and then update the display once in one go
-#define double_buffer true
+#define PxMATRIX_DOUBLE_BUFFER true
 
 // Include must go here because double_buffer muse be defined first
-#include <PxMatrix.h>
+#include "PxMatrix/PxMatrix.h"
+#include "Fonts/TomThumb.h"
 
 //
 hw_timer_t * timer = NULL;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
-#define MATRIX_WIDTH 64
-#define MATRIX_HEIGHT 32
+#define MATRIX_WIDTH 128
+#define MATRIX_HEIGHT 64
+#define SCROLL_DELAY 50
+
+#define P_LAT 22
+#define P_A 19
+#define P_B 23
+#define P_C 18
+#define P_D 5
+#define P_E 26
+#define P_OE 16
 
 // This defines the 'on' time of the display is us. The larger this number,
 // the brighter the display. If too large the ESP will crash
-#define DISPLAY_DRAW_TIME 70 // 30-70 is usually fine
+#define DISPLAY_DRAW_TIME 20 // 30-70 is usually fine
 
 // Create our display with the correct pins
 // LAT=22, OE=2, A=19, B=23, C=18, D=5 (if there's an E it would be 15)
-PxMATRIX display(MATRIX_WIDTH, MATRIX_HEIGHT, 22, 2, 19, 23, 18, 5);
+PxMATRIX display(MATRIX_WIDTH, MATRIX_HEIGHT, P_LAT, P_OE, P_A, P_B, P_C, P_D, P_E);
 
 // Some standard colors
-uint16_t myRED     = display.color565(255, 0, 0);
-uint16_t myGREEN   = display.color565(0, 255, 0);
-uint16_t myBLUE    = display.color565(0, 0, 255);
-uint16_t myWHITE   = display.color565(255, 255, 255);
-uint16_t myYELLOW  = display.color565(255, 255, 0);
-uint16_t myCYAN    = display.color565(0, 255, 255);
-uint16_t myMAGENTA = display.color565(255, 0, 255);
-uint16_t myBLACK   = display.color565(0, 0, 0);
+const uint16_t red = display.color565(200, 0, 0);
+const uint16_t green = display.color565(0, 200, 0);
+const uint16_t blue = display.color565(0, 175, 200);
+const uint16_t purple = display.color565(125, 0, 200);
+const uint16_t white = display.color565(255, 255, 255);
+const uint16_t black = display.color565(0, 0, 0);
+
+const uint16_t red_palette[] = {black, red};
+const uint16_t green_palette[] = {black, green};
+const uint16_t blue_palette[] = {black, blue};
+const uint16_t white_palette[] = {black, white};
+
+const uint16_t logo_palette_default[] = {black, purple, white, white, white, white, white, white, white};
+
 
 // Display writer function from the example code
 void IRAM_ATTR display_updater(){
@@ -59,7 +75,10 @@ void IRAM_ATTR display_updater(){
 void displayOffline() {
 
   display.clearDisplay();
-  display.drawPixel(MATRIX_WIDTH - 1, MATRIX_HEIGHT - 1, display.color565(255, 0, 0));
+  display.setTextColor(red);
+  display.setCursor(0, 0);
+  display.print("error fetching \nstats...");
+  display.drawPixel(MATRIX_WIDTH - 1, MATRIX_HEIGHT - 1, red);
   display.showBuffer();
   display.copyBuffer();
 
@@ -73,34 +92,25 @@ void fillBlankRow(uint8_t ypos) {
   // Clear only the pixels on this part of the display
   for (int x = 0; x < MATRIX_WIDTH; x++) {
     for (int y = ypos; y < ypos + 8; y++) {
-      display.drawPixel(x, y, display.color565(0, 0, 0 ));
+      display.drawPixel(x, y, black);
     }
   }
 }
 
 
-void drawScrollingText(uint8_t ypos, int xpos, String scrollingText, uint8_t colorR_b, uint8_t colorG_b, uint8_t colorB_b) {
+void drawScrollingText(uint8_t ypos, int xpos, String scrollingText, uint16_t color) {
   // Write the scrolling text in its current position
-  display.setTextColor(display.color565(colorR_b,colorG_b,colorB_b));
+  display.setTextColor(color);
   display.setCursor(xpos, ypos);
-  display.println(scrollingText);
+  display.print(scrollingText);
 }
 
 
-void drawStaticText(uint8_t ypos, uint16_t offset, String staticText, uint8_t colorR_a, uint8_t colorG_a, uint8_t colorB_a) {
-
-  // Write black over the area the static text will take up
-  for (int x = 0; x < offset; x++) {
-    for (int y = ypos; y < ypos + 8; y++) {
-      display.drawPixel(x, y, 0);
-    }
-  }
-
+void drawStaticText(uint8_t ypos, uint16_t offset, String staticText, uint16_t color) {
   // Draw the static text
-  display.setCursor(0, ypos);
-  display.setTextColor(display.color565(colorR_a,colorG_a,colorB_a));
-  display.println(staticText);
-
+  display.setCursor(offset, ypos);
+  display.setTextColor(color, black);
+  display.print(staticText);
 }
 
 void drawRightAlignedText(uint8_t xpos, uint8_t ypos, String text) {
@@ -115,59 +125,50 @@ void drawRightAlignedText(uint8_t xpos, uint8_t ypos, String text) {
 
 }
 
-void drawStaticAndScrollingText(uint8_t ypos, unsigned long scroll_delay, String staticText, String scrollingText, uint8_t colorR_a, uint8_t colorG_a, uint8_t colorB_a, uint8_t colorR_b, uint8_t colorG_b, uint8_t colorB_b) {
+void drawStaticAndScrollingText(uint8_t ypos, const long startTime, const long now, String staticText, uint16_t staticColor, String scrollingText, uint16_t scrollingColor) {
 
-  // Asuming 5 pixel average character width
-  uint8_t characterWidth = 5;
+    // Asuming 5 pixel average character width
+    uint8_t characterWidth = 5;
 
-  uint16_t scrollingTextLength = scrollingText.length();
-  uint16_t offset = staticText.length() * (characterWidth + 1);
+    const uint8_t scrollDelay = 5000;
 
-  // Initial setup
-  display.setTextSize(1);
-  display.setRotation(0);
+    uint16_t scrollingTextLength = scrollingText.length();
+    uint16_t offset = staticText.length() * (characterWidth + 1);
 
-  // Each animation step of the scrolling
-  for (int xpos = offset; xpos > -(MATRIX_WIDTH + scrollingTextLength * characterWidth) + 50; xpos--) {
 
-    // Clear only the pixels on this part of the display
-    fillBlankRow(ypos);
 
-    drawScrollingText(ypos, xpos, scrollingText, colorR_b, colorG_b, colorB_b);
+    // Initial setup
+    display.setTextSize(1);
+    display.setRotation(0);
 
-    drawStaticText(ypos, offset, staticText, colorR_a, colorG_a, colorB_a);
+    const uint16_t totalStrLength = staticText.length() + scrollingTextLength;
 
-    // Draw the updates to the display
-    display.showBuffer();
+    if (startTime == now
+        || now - startTime < scrollDelay
+        || totalStrLength * (characterWidth + 1) < MATRIX_WIDTH) {
 
-    // Copy the updates to the second buffer to avoid flashing
-    display.copyBuffer();
-
-    // Pause so we can set the speed of the animation
-    delay(scroll_delay);
-    yield();
-
-  }
-
-  // Write the scrolling text again, once the scroll has finished
-  // so that it persists while we're scrolling the other lines
-  fillBlankRow(ypos);
-  drawScrollingText(ypos, offset, scrollingText, colorR_b, colorG_b, colorB_b);
-  drawStaticText(ypos, 0, staticText, colorR_a, colorG_a, colorB_a);
-
-  // Send the final line to the display
-  display.showBuffer();
-  display.copyBuffer();
-
+        drawStaticText(ypos, offset, scrollingText, scrollingColor);
+        drawStaticText(ypos, 0, staticText, staticColor);
+    } else {
+        int frame = (now - startTime - scrollDelay) / SCROLL_DELAY;
+        int xpos = offset - frame;
+        if (xpos > -(MATRIX_WIDTH + scrollingTextLength * characterWidth)) {
+            drawScrollingText(ypos, xpos, scrollingText, scrollingColor);
+            drawStaticText(ypos, 0, staticText, staticColor);
+        } else {
+            drawStaticText(ypos, offset, scrollingText, scrollingColor);
+            drawStaticText(ypos, 0, staticText, staticColor);
+        }
+    }
 }
 
 
 void setupDisplay() {
 
-  // Start up our display with a 1/16 scan rate
-  display.begin(16);
+  // Start up our display with a 1/32 scan rate
+  display.begin(32);
 
-  // This is required for my SRYLED P4 display to work properly
+  // This is required for my SRYLED P2.5 display to work properly
   display.setMuxDelay(0,2,0,0,0);
 
   // Empty anything in the display buffer
@@ -251,19 +252,12 @@ void changeBrightnessNonBlocking() {
 
 }
 
-void drawIcon(int x, int y, int width, int height, const uint16_t image[]) {
-
-//uint16_t * buffer = new uint16_t[2048];
-  //memcpy_P(buffer, image, 2048);
-
+void drawIcon(int x, int y, int width, int height, const uint8_t image[], const uint16_t palette[]) {
   int counter = 0;
   for (int yy = 0; yy < height; yy++) {
     for (int xx = 0; xx < width; xx++) {
-      display.drawPixel(xx + x , yy + y, image[counter]);
+      display.drawPixel(xx + x , yy + y, palette[image[counter]]);
       counter++;
     }
   }
-
-  //free(buffer);
-
 }

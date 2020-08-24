@@ -7,6 +7,8 @@ services:
     ports:
     - "1883:1883"
     - "9001:9001"
+    volumes:
+    - "./mqtt:/mosquitto/config/"
   unifi-scraper:
     container_name: unifi-scraper
     build:

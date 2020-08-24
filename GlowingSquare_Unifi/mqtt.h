@@ -19,7 +19,7 @@ PubSubClient mqttClient(wifiClient);
 
 // If we don't want to use the hostname
 // Useful if we'll have several of these devices in one room
-#define MQTT_NAME "glowingsquare/unifi"
+#define MQTT_NAME "unifi"
 
 char deviceTopic[40];
 char inTopic[40];
@@ -74,11 +74,14 @@ boolean mqttConnect() {
   Serial.print(mqtt_server);
   Serial.print(":");
   Serial.println(atoi(mqtt_port));
+  Serial.print("User: ");
+  Serial.println(mqtt_username);
 
   // Use hostname as our client ID
   // Use our will topic to broadcast a "disconnected" message when device goes down
   if (mqttClient.connect(hostname, mqtt_username, mqtt_password, willTopic, 0, 1, "disconnected")) {
 
+    Serial.println("Connected!");
     // Announce the connection, and make our subscriptions
     mqttClient.publish(willTopic, "connected");
     mqttClient.subscribe(inTopic);

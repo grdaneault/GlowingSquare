@@ -14,6 +14,8 @@
  *
  */
 
+#define PxMATRIX_DOUBLE_BUFFER true
+
 // Include Libraries
 #include <FS.h>            // this needs to be first, or it all crashes and burns...
 #include <WiFiManager.h>   // https://github.com/tzapu/WiFiManager ~v2.0.0
@@ -29,20 +31,21 @@
 #endif
 
 // Uncomment to reset device memory (useful to fix corruption / force new settings)
-//#define START_ANEW
+// #define START_ANEW
 
 int party_mode = 0; // 0 = off, 1 = chill, 2 = party
 int last_party_mode = party_mode;
 uint8_t targetDisplayBrightness = 255;
 uint8_t currentDisplayBrightness = 255;
 
-#define INFO_UPDATE_INTERVAL 30000
+#define INFO_UPDATE_INTERVAL 15000
 
 // Include the other sketch files
 #include "settings.h"
 #include "display.h"
 #include "icons.h"
 #include "wifi.h"
+#include "time.h"
 #include "unifi.h"
 #include "animations.h"
 #include "mqtt.h"
@@ -68,7 +71,9 @@ void setup() {
   ArduinoOTA.begin();
 
   // Instantiate MQTT
-  setupMQTT();
+  // setupMQTT();
+
+  timeClient.begin();
 
   setupAnimations();
 
@@ -83,10 +88,10 @@ void loop() {
   long now = millis();
 
   // Loop our network services
-  mqttLoop();          // Non-blocking MQTT connect/re-connect
+  // mqttLoop();          // Non-blocking MQTT connect/re-connect
   ArduinoOTA.handle();    // In case we want to upload a new sketch
 
-  // Show tube stuff only if party mode is off
+  // Show stuff only if party mode is off
   if (party_mode == 0) {
 
     // We need to use the blocking fade because the
@@ -95,7 +100,7 @@ void loop() {
 
     // Only download new info every 10 seconds
     if (now - lastWebRequest > INFO_UPDATE_INTERVAL && currentDisplayBrightness != 0) {
-
+      timeClient.update();
       downloadAndDisplayNetworkInfo();
 
       // Only display as offline if we've had 3 failed web requests in a row

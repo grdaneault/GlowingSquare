@@ -15,10 +15,10 @@
  */
 
 // Default values for config common to all projects
-char hostname[24] = "glowingsquare_unifi";
-char script_url[50] = "http://10.0.1.145:8080/";
+char hostname[24] = "wifistats";
+char script_url[50] = "http://192.168.1.195:8080/";
 char room[30] = "living_room";
-char mqtt_server[40];
+char mqtt_server[40] = "192.168.1.195";
 char mqtt_port[6] = "1883";
 char mqtt_username[40];
 char mqtt_password[40];

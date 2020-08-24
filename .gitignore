@@ -8,3 +8,5 @@ config.php
 secret.h
 
 .idea/
+
+password_auth

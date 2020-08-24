@@ -42,6 +42,7 @@ unsigned long next_frame = 0;
 void setupAnimations() {
   // Load the effects into memory
   effects.Setup();
+  Serial.println("animations set up!");
 
   // Just a placeholder until we set it again later
   patterns.setPattern(1);
